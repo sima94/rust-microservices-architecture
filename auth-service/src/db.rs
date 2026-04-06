@@ -13,7 +13,7 @@ async fn create_pool(url: &str, max_size: u32) -> DbPool {
         .max_connections(max_size)
         .connect(url)
         .await
-        .expect(&format!("Failed to create pool for {}", url))
+        .unwrap_or_else(|_| panic!("Failed to create pool for {}", url))
 }
 
 pub async fn init_pools() -> DbPools {

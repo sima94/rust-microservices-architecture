@@ -35,10 +35,10 @@ impl AuthService {
         let user = AuthUserRepository::create(&pools.write, new_user)
             .await
             .map_err(|e| {
-                if let sqlx::Error::Database(ref db_err) = e {
-                    if db_err.is_unique_violation() {
-                        return ServiceError::Conflict("Email already registered".into());
-                    }
+                if let sqlx::Error::Database(ref db_err) = e
+                    && db_err.is_unique_violation()
+                {
+                    return ServiceError::Conflict("Email already registered".into());
                 }
                 ServiceError::from(e)
             })?;

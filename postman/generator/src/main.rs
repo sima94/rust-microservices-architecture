@@ -289,13 +289,13 @@ fn build_item(rc: &RequestConfig, operations: &OperationMap, overlay: &Overlay) 
     let mut item = json!({"name": rc.name, "request": request});
     let mut events: Vec<Value> = Vec::new();
 
-    if let Some(script_name) = &rc.prerequest {
-        if let Some(lines) = overlay.scripts.get(script_name) {
-            events.push(json!({
-                "listen": "prerequest",
-                "script": {"exec": lines}
-            }));
-        }
+    if let Some(script_name) = &rc.prerequest
+        && let Some(lines) = overlay.scripts.get(script_name)
+    {
+        events.push(json!({
+            "listen": "prerequest",
+            "script": {"exec": lines}
+        }));
     }
 
     let test_lines = build_test_script(rc);
