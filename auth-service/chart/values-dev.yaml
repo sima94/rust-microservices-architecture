@@ -1,0 +1,4 @@
+microservice:
+  image:
+    repository: ${DOCKER_REGISTRY}/auth-service
+    tag: "dev-latest"

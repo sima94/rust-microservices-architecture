@@ -1,0 +1,30 @@
+**/target
+**/.DS_Store
+.git
+.gitignore
+
+# Secrets and environment files
+.secrets/
+**/.env
+*.env
+
+# Infrastructure configs (not needed in service images)
+terraform/
+helm/
+scripts/
+docker/
+nginx/
+postman/
+
+# Documentation
+*.md
+LICENSE
+
+# CI/CD
+.github/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

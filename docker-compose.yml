@@ -1,0 +1,346 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth-service
+      - user-service
+
+  # ── Redis Cache ────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── etcd (Patroni consensus) ──────────────────────────────────
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.12
+    command:
+      - etcd
+      - --name=etcd
+      - --listen-peer-urls=http://0.0.0.0:2380
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+      - --initial-cluster-token=patroni-dev
+      - --initial-cluster=etcd=http://etcd:2380
+      - --initial-advertise-peer-urls=http://etcd:2380
+    ports:
+      - "2379:2379"
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── User DB Patroni Cluster (3 nodes, auto-failover) ──────────
+
+  patroni-user-1:
+    build: ./docker/patroni
+    hostname: patroni-user-1
+    environment:
+      PATRONI_SCOPE: user-cluster
+      PATRONI_NAME: patroni-user-1
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-user.sh
+    volumes:
+      - patroni-user-1-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  patroni-user-2:
+    build: ./docker/patroni
+    hostname: patroni-user-2
+    environment:
+      PATRONI_SCOPE: user-cluster
+      PATRONI_NAME: patroni-user-2
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-user.sh
+    volumes:
+      - patroni-user-2-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  patroni-user-3:
+    build: ./docker/patroni
+    hostname: patroni-user-3
+    environment:
+      PATRONI_SCOPE: user-cluster
+      PATRONI_NAME: patroni-user-3
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-user.sh
+    volumes:
+      - patroni-user-3-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  # ── User HAProxy (write → master, read → replicas) ────────────
+
+  haproxy-user-write:
+    image: haproxy:2.8-alpine
+    volumes:
+      - ./docker/haproxy/user-write.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - patroni-user-1
+      - patroni-user-2
+      - patroni-user-3
+
+  haproxy-user-read:
+    image: haproxy:2.8-alpine
+    volumes:
+      - ./docker/haproxy/user-read.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - patroni-user-1
+      - patroni-user-2
+      - patroni-user-3
+
+  # ── User PgBouncer (connection pooling) ────────────────────────
+
+  pgbouncer-user-write:
+    image: edoburu/pgbouncer:latest
+    ports:
+      - "5432:5432"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@haproxy-user-write:5432/${USER_DB_NAME:-rust_db}
+      POOL_MODE: session
+      MAX_CLIENT_CONN: "${PGBOUNCER_MAX_CLIENT_CONN:-200}"
+      DEFAULT_POOL_SIZE: "${PGBOUNCER_DEFAULT_POOL_SIZE:-20}"
+      MIN_POOL_SIZE: "${PGBOUNCER_MIN_POOL_SIZE:-5}"
+      AUTH_TYPE: md5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER:-rust_user}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - haproxy-user-write
+
+  pgbouncer-user-read:
+    image: edoburu/pgbouncer:latest
+    ports:
+      - "5434:5432"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@haproxy-user-read:5432/${USER_DB_NAME:-rust_db}
+      POOL_MODE: session
+      MAX_CLIENT_CONN: "${PGBOUNCER_MAX_CLIENT_CONN:-200}"
+      DEFAULT_POOL_SIZE: "${PGBOUNCER_DEFAULT_POOL_SIZE:-20}"
+      MIN_POOL_SIZE: "${PGBOUNCER_MIN_POOL_SIZE:-5}"
+      AUTH_TYPE: md5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER:-rust_user}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - haproxy-user-read
+
+  # ── Auth DB Patroni Cluster (3 nodes, auto-failover) ──────────
+
+  patroni-auth-1:
+    build: ./docker/patroni
+    hostname: patroni-auth-1
+    environment:
+      PATRONI_SCOPE: auth-cluster
+      PATRONI_NAME: patroni-auth-1
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-auth.sh
+    volumes:
+      - patroni-auth-1-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  patroni-auth-2:
+    build: ./docker/patroni
+    hostname: patroni-auth-2
+    environment:
+      PATRONI_SCOPE: auth-cluster
+      PATRONI_NAME: patroni-auth-2
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-auth.sh
+    volumes:
+      - patroni-auth-2-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  patroni-auth-3:
+    build: ./docker/patroni
+    hostname: patroni-auth-3
+    environment:
+      PATRONI_SCOPE: auth-cluster
+      PATRONI_NAME: patroni-auth-3
+      ETCD_HOSTS: etcd:2379
+      POST_INIT_SCRIPT: /post-init-auth.sh
+    volumes:
+      - patroni-auth-3-data:/home/postgres/data
+    depends_on:
+      etcd:
+        condition: service_healthy
+
+  # ── Auth HAProxy (write → master, read → replicas) ────────────
+
+  haproxy-auth-write:
+    image: haproxy:2.8-alpine
+    volumes:
+      - ./docker/haproxy/auth-write.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - patroni-auth-1
+      - patroni-auth-2
+      - patroni-auth-3
+
+  haproxy-auth-read:
+    image: haproxy:2.8-alpine
+    volumes:
+      - ./docker/haproxy/auth-read.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - patroni-auth-1
+      - patroni-auth-2
+      - patroni-auth-3
+
+  # ── Auth PgBouncer (connection pooling) ────────────────────────
+
+  pgbouncer-auth-write:
+    image: edoburu/pgbouncer:latest
+    ports:
+      - "5433:5432"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@haproxy-auth-write:5432/${AUTH_DB_NAME:-auth_db}
+      POOL_MODE: session
+      MAX_CLIENT_CONN: "${PGBOUNCER_MAX_CLIENT_CONN:-200}"
+      DEFAULT_POOL_SIZE: "${PGBOUNCER_DEFAULT_POOL_SIZE:-20}"
+      MIN_POOL_SIZE: "${PGBOUNCER_MIN_POOL_SIZE:-5}"
+      AUTH_TYPE: md5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER:-rust_user}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - haproxy-auth-write
+
+  pgbouncer-auth-read:
+    image: edoburu/pgbouncer:latest
+    ports:
+      - "5435:5432"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@haproxy-auth-read:5432/${AUTH_DB_NAME:-auth_db}
+      POOL_MODE: session
+      MAX_CLIENT_CONN: "${PGBOUNCER_MAX_CLIENT_CONN:-200}"
+      DEFAULT_POOL_SIZE: "${PGBOUNCER_DEFAULT_POOL_SIZE:-20}"
+      MIN_POOL_SIZE: "${PGBOUNCER_MIN_POOL_SIZE:-5}"
+      AUTH_TYPE: md5
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -p 5432 -U ${DB_USER:-rust_user}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      - haproxy-auth-read
+
+  # ── Kafka ─────────────────────────────────────────────────────
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - kafka
+    command: >
+      bash -c "echo 'Waiting for Kafka...' &&
+      sleep 15 &&
+      kafka-topics --create --if-not-exists
+        --bootstrap-server kafka:29092
+        --topic user.events
+        --partitions 5
+        --replication-factor 1 &&
+      echo 'Topic user.events created with 5 partitions'"
+    restart: "no"
+
+  # ── Services ──────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@pgbouncer-auth-write:5432/${AUTH_DB_NAME:-auth_db}?sslmode=disable
+      DATABASE_READ_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@pgbouncer-auth-read:5432/${AUTH_DB_NAME:-auth_db}?sslmode=disable
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-your-dev-secret-change-in-production}
+      KAFKA_BROKER: ${KAFKA_BROKER:-kafka:29092}
+    depends_on:
+      pgbouncer-auth-write:
+        condition: service_healthy
+      pgbouncer-auth-read:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@pgbouncer-user-write:5432/${USER_DB_NAME:-rust_db}?sslmode=disable
+      DATABASE_READ_URL: postgres://${DB_USER:-rust_user}:${DB_PASSWORD:-rust_pass}@pgbouncer-user-read:5432/${USER_DB_NAME:-rust_db}?sslmode=disable
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-your-dev-secret-change-in-production}
+      KAFKA_BROKER: ${KAFKA_BROKER:-kafka:29092}
+      DB_POOL_MAX_SIZE: "${DB_POOL_MAX_SIZE:-10}"
+    depends_on:
+      pgbouncer-user-write:
+        condition: service_healthy
+      pgbouncer-user-read:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+volumes:
+  patroni-user-1-data:
+  patroni-user-2-data:
+  patroni-user-3-data:
+  patroni-auth-1-data:
+  patroni-auth-2-data:
+  patroni-auth-3-data:

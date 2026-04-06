@@ -1,0 +1,27 @@
+microservice:
+  image:
+    repository: ${DOCKER_REGISTRY}/user-service
+    tag: "latest"
+
+  replicaCount: 3
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPU: 70
+    targetMemory: 80
+
+  networkPolicy:
+    enabled: true
+    allowedNamespaceLabels:
+      kubernetes.io/metadata.name: ingress-nginx
+    allowedPodLabels: {}

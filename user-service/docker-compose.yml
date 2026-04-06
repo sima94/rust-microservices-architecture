@@ -1,0 +1,24 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: rust_user
+      POSTGRES_PASSWORD: rust_pass
+      POSTGRES_DB: rust_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  user-service:
+    build: .
+    ports:
+      - "8082:8082"
+    environment:
+      DATABASE_URL: postgres://rust_user:rust_pass@postgres:5432/rust_db
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:

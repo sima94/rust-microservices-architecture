@@ -1,0 +1,22 @@
+# Secrets
+.secrets/*.env
+!.secrets/*.example
+**/.env
+
+# Rust build artifacts
+**/target/
+
+# macOS
+**/.DS_Store
+
+# Terraform
+terraform/**/*.tfstate
+terraform/**/*.tfstate.backup
+terraform/**/*.tfvars
+terraform/**/.terraform/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

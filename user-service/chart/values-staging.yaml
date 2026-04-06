@@ -1,0 +1,21 @@
+microservice:
+  image:
+    repository: ${DOCKER_REGISTRY}/user-service
+    tag: "staging-latest"
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "256Mi"
+    limits:
+      cpu: "1"
+      memory: "512Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPU: 70
+    targetMemory: 80

@@ -1,0 +1,4 @@
+microservice:
+  image:
+    repository: ${DOCKER_REGISTRY}/user-service
+    tag: "dev-latest"

@@ -1,0 +1,6 @@
+dependencies:
+- name: microservice
+  repository: file://../../helm/charts/microservice
+  version: 0.1.0
+digest: sha256:75b2a75cf0d46ac74f14d98d64f1a8472eb81009a7aef1ea53169ac411744662
+generated: "2026-03-28T00:40:39.776156+01:00"

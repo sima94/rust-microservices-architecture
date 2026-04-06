@@ -1,0 +1,65 @@
+replicaCount: 1
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+probes:
+  liveness:
+    path: "/health"
+    initialDelay: 10
+    period: 30
+  readiness:
+    path: "/health"
+    initialDelay: 5
+    period: 10
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPU: 70
+  targetMemory: 80
+
+serviceAccount:
+  create: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+# Non-sensitive env vars -> ConfigMap
+config: {}
+
+# Sensitive env vars -> Secret
+secrets: {}
+
+terminationGracePeriodSeconds: 30
+
+networkPolicy:
+  enabled: false
+  allowedNamespaceLabels: {}
+  allowedPodLabels: {}
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

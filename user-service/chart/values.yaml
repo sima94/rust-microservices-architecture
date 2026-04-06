@@ -1,0 +1,26 @@
+microservice:
+  image:
+    repository: user-service-arm64
+    tag: "latest"
+
+  containerPort: 8082
+
+  service:
+    port: 8082
+
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPU: 70
+    targetMemory: 80
+
+  config:
+    REDIS_URL: "redis://redis:6379"
+    KAFKA_BROKER: "kafka:29092"
+    DB_POOL_MAX_SIZE: "10"
+
+  secrets:
+    DATABASE_URL: ""
+    DATABASE_READ_URL: ""
+    JWT_SECRET: ""

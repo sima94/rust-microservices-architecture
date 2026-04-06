@@ -1,0 +1,127 @@
+data.oci_core_images.oracle_linux: Reading...
+data.oci_identity_availability_domains.ads: Reading...
+oci_core_vcn.dev_vcn: Refreshing state... [id=ocid1.vcn.oc1.eu-frankfurt-1.amaaaaaa34cfdqyatmyh2tx6ejm2h4jnknzcumpi2zypns2aboifayxwfxva]
+data.oci_identity_availability_domains.ads: Read complete after 0s [id=IdentityAvailabilityDomainsDataSource-799242810]
+oci_core_internet_gateway.dev_ig: Refreshing state... [id=ocid1.internetgateway.oc1.eu-frankfurt-1.aaaaaaaacvcjwe3xpafjet2z5wne3lcymqyvnrtolc2xuunkf4margb7hxra]
+oci_core_nat_gateway.dev_nat: Refreshing state... [id=ocid1.natgateway.oc1.eu-frankfurt-1.aaaaaaaasmtyiztbxjxzy6d4juupvffnubkuafba3ez6ueafrfy2zcdqdnkq]
+oci_core_security_list.dev_sl: Refreshing state... [id=ocid1.securitylist.oc1.eu-frankfurt-1.aaaaaaaa622nionewucsyeyni34r7kbvlszikmtf6ihrhzakxtyjj6ppaawq]
+data.oci_core_images.oracle_linux: Read complete after 0s [id=CoreImagesDataSource-1870426959]
+oci_core_route_table.private_rt: Refreshing state... [id=ocid1.routetable.oc1.eu-frankfurt-1.aaaaaaaatcov6nhzi34mwf5spw45jnqzqjieeecw575onoew42imznoj4h3a]
+oci_core_route_table.public_rt: Refreshing state... [id=ocid1.routetable.oc1.eu-frankfurt-1.aaaaaaaawe2kx7wccttmrb6a6f5ksgwiqquzm5ajt2vssvfvibngdpraa6ha]
+oci_core_subnet.private_subnet: Refreshing state... [id=ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaawzwom2qu6vy26y4trelwyauzrhmzgkujx5w3w6hltebaji3sn27a]
+oci_core_subnet.public_subnet: Refreshing state... [id=ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaanjrtg62m5ao26e3b4jpu7gqzhk233zevx7otzz67m4zafykqzlta]
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+
+Terraform will perform the following actions:
+
+  # oci_containerengine_cluster.dev_cluster will be created
+  + resource "oci_containerengine_cluster" "dev_cluster" {
+      + available_kubernetes_upgrades = (known after apply)
+      + compartment_id                = "ocid1.tenancy.oc1..aaaaaaaaxlliamieabhbz7o2nfa3sn6uyi3k2form5v2karqbsgumqyzkxrq"
+      + defined_tags                  = (known after apply)
+      + endpoints                     = (known after apply)
+      + freeform_tags                 = (known after apply)
+      + id                            = (known after apply)
+      + kms_key_id                    = (known after apply)
+      + kubernetes_version            = "v1.28.2"
+      + lifecycle_details             = (known after apply)
+      + metadata                      = (known after apply)
+      + name                          = "dev-oke-cluster"
+      + state                         = (known after apply)
+      + type                          = (known after apply)
+      + vcn_id                        = "ocid1.vcn.oc1.eu-frankfurt-1.amaaaaaa34cfdqyatmyh2tx6ejm2h4jnknzcumpi2zypns2aboifayxwfxva"
+
+      + endpoint_config {
+          + is_public_ip_enabled = true
+          + subnet_id            = "ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaanjrtg62m5ao26e3b4jpu7gqzhk233zevx7otzz67m4zafykqzlta"
+        }
+
+      + options {
+          + service_lb_subnet_ids = (known after apply)
+
+          + add_ons {
+              + is_kubernetes_dashboard_enabled = false
+              + is_tiller_enabled               = false
+            }
+
+          + kubernetes_network_config {
+              + pods_cidr     = "10.244.0.0/16"
+              + services_cidr = "10.96.0.0/16"
+            }
+        }
+    }
+
+  # oci_containerengine_node_pool.dev_node_pool will be created
+  + resource "oci_containerengine_node_pool" "dev_node_pool" {
+      + cluster_id          = (known after apply)
+      + compartment_id      = "ocid1.tenancy.oc1..aaaaaaaaxlliamieabhbz7o2nfa3sn6uyi3k2form5v2karqbsgumqyzkxrq"
+      + defined_tags        = (known after apply)
+      + freeform_tags       = (known after apply)
+      + id                  = (known after apply)
+      + kubernetes_version  = "v1.28.2"
+      + lifecycle_details   = (known after apply)
+      + name                = "dev-oke-pool"
+      + node_image_id       = (known after apply)
+      + node_image_name     = (known after apply)
+      + node_metadata       = (known after apply)
+      + node_shape          = "VM.Standard.A1.Flex"
+      + node_source         = (known after apply)
+      + nodes               = (known after apply)
+      + quantity_per_subnet = (known after apply)
+      + ssh_public_key      = (known after apply)
+      + state               = (known after apply)
+      + subnet_ids          = (known after apply)
+
+      + node_config_details {
+          + defined_tags                        = (known after apply)
+          + freeform_tags                       = (known after apply)
+          + is_pv_encryption_in_transit_enabled = (known after apply)
+          + kms_key_id                          = (known after apply)
+          + nsg_ids                             = (known after apply)
+          + size                                = 2
+
+          + placement_configs {
+              + availability_domain     = "QWNM:EU-FRANKFURT-1-AD-1"
+              + capacity_reservation_id = (known after apply)
+              + fault_domains           = (known after apply)
+              + subnet_id               = "ocid1.subnet.oc1.eu-frankfurt-1.aaaaaaaawzwom2qu6vy26y4trelwyauzrhmzgkujx5w3w6hltebaji3sn27a"
+            }
+        }
+
+      + node_shape_config {
+          + memory_in_gbs = 12
+          + ocpus         = 2
+        }
+
+      + node_source_details {
+          + boot_volume_size_in_gbs = (known after apply)
+          + image_id                = "ocid1.image.oc1.eu-frankfurt-1.aaaaaaaax2ndf6yv4r6m4b6vgztrkdlchiiuniubts5vtw7brc5jpzt7wl5a"
+          + source_type             = "IMAGE"
+        }
+    }
+
+Plan: 2 to add, 0 to change, 0 to destroy.
+
+Changes to Outputs:
+  + cluster_id         = (known after apply)
+  + kubeconfig_command = (known after apply)
+oci_containerengine_cluster.dev_cluster: Creating...
+
+Error: 400-InvalidParameter, Invalid kubernetesVersion: Invalid Kubernetes version v1.28.2. Supported versions: [v1.31.1, v1.31.10, v1.32.1, v1.32.10, v1.33.0, v1.33.1, v1.34.0, v1.34.1, v1.34.2, v1.35.0]
+Suggestion: Please update the parameter(s) in the Terraform config as per error message Invalid kubernetesVersion: Invalid Kubernetes version v1.28.2. Supported versions: [v1.31.1, v1.31.10, v1.32.1, v1.32.10, v1.33.0, v1.33.1, v1.34.0, v1.34.1, v1.34.2, v1.35.0]
+Documentation: https://registry.terraform.io/providers/oracle/oci/latest/docs/resources/containerengine_cluster 
+API Reference: https://docs.oracle.com/iaas/api/#/en/containerengine/20180222/Cluster/CreateCluster 
+Request Target: POST https://containerengine.eu-frankfurt-1.oci.oraclecloud.com/20180222/clusters 
+Provider version: 5.47.0, released on 2024-06-19. This provider is 93 Update(s) behind to current. 
+Service: Containerengine Cluster 
+Operation Name: CreateCluster 
+OPC request ID: 0938afc01f0b0891d07bb38f73bdad06/D33D9CD2CA9B91FA3751CE694652419B/D45C2B78A85785F6CF5E08B414AD0098 
+
+
+  with oci_containerengine_cluster.dev_cluster,
+  on oke.tf line 1, in resource "oci_containerengine_cluster" "dev_cluster":
+   1: resource "oci_containerengine_cluster" "dev_cluster" {
+

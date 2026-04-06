@@ -1,0 +1,785 @@
+{
+  "info": {
+    "description": "Full API collection for auth-service and user-service with chained OAuth2/PKCE flow.\n\nRun requests in order within '1. Auth Flow' to set up authentication, then use '2. User CRUD'.",
+    "name": "Rust Microservices Architecture",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health - Auth (via nginx)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Health - Auth (via nginx)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/health/auth"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health - User (via nginx)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Health - User (via nginx)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/health/user"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health - Auth (direct)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Health - Auth (direct)",
+          "request": {
+            "method": "GET",
+            "url": "{{auth_url}}/health"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Health - User (direct)', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Health - User (direct)",
+          "request": {
+            "method": "GET",
+            "url": "{{user_url}}/health"
+          }
+        }
+      ],
+      "name": "0. Health Checks"
+    },
+    {
+      "description": "Run these requests in order to complete the full OAuth2/PKCE authentication flow. Each step auto-saves variables for the next.",
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('auth_user_id', json.id);",
+                  "    pm.test('1.1 Register User - success', function () {",
+                  "        pm.response.to.have.status(201);",
+                  "    });",
+                  "} else if (pm.response.code === 409) {",
+                  "    pm.test('1.1 Register User - already exists (OK)', function () {",
+                  "        pm.response.to.have.status(409);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "name": "1.1 Register User",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.2 Register OAuth Client - success', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('client_secret', json.client_secret);",
+                  "    pm.collectionVariables.set('client_id', json.client_id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.2 Register OAuth Client",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_name\": \"PostmanApp\",\n  \"redirect_uri\": \"http://localhost:3000/callback\",\n  \"scopes\": \"read write\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/clients/register"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate PKCE code_verifier and code_challenge",
+                  "function base64URLEncode(buffer) {",
+                  "    return buffer.toString('base64')",
+                  "        .replace(/\\+/g, '-')",
+                  "        .replace(/\\//g, '_')",
+                  "        .replace(/=+$/, '');",
+                  "}",
+                  "",
+                  "var verifier = base64URLEncode(require('crypto').randomBytes(32));",
+                  "pm.collectionVariables.set('code_verifier', verifier);",
+                  "",
+                  "var challenge = base64URLEncode(",
+                  "    require('crypto').createHash('sha256').update(verifier).digest()",
+                  ");",
+                  "pm.collectionVariables.set('code_challenge', challenge);",
+                  "",
+                  "var state = base64URLEncode(require('crypto').randomBytes(16));",
+                  "pm.collectionVariables.set('state', state);",
+                  "",
+                  "console.log('code_verifier:', verifier);",
+                  "console.log('code_challenge:', challenge);",
+                  "console.log('state:', state);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.3 Authorize (PKCE) - success', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('auth_code', json.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.3 Authorize (PKCE)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": {
+              "host": [
+                "{{auth_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "oauth",
+                "authorize"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "{{state}}"
+                },
+                {
+                  "key": "response_type",
+                  "value": "code"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "read write"
+                },
+                {
+                  "key": "code_challenge",
+                  "value": "{{code_challenge}}"
+                },
+                {
+                  "key": "code_challenge_method",
+                  "value": "S256"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "http://localhost:3000/callback"
+                }
+              ],
+              "raw": "{{auth_url}}/api/v1/oauth/authorize?state={{state}}&response_type=code&client_id={{client_id}}&scope=read write&code_challenge={{code_challenge}}&code_challenge_method=S256&redirect_uri=http://localhost:3000/callback"
+            }
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.4 Exchange Code for Token - success', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refresh_token', json.refresh_token);",
+                  "    }",
+                  "    pm.collectionVariables.set('access_token', json.access_token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.4 Exchange Code for Token",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\",\n  \"code\": \"{{auth_code}}\",\n  \"code_verifier\": \"{{code_verifier}}\",\n  \"grant_type\": \"authorization_code\",\n  \"redirect_uri\": \"http://localhost:3000/callback\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/oauth/token"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.5 Refresh Token - success', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    if (json.refresh_token) {",
+                  "        pm.collectionVariables.set('refresh_token', json.refresh_token);",
+                  "    }",
+                  "    pm.collectionVariables.set('access_token', json.access_token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.5 Refresh Token",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\",\n  \"grant_type\": \"refresh_token\",\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/oauth/token"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.6 Client Credentials Grant - success', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', json.access_token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.6 Client Credentials Grant",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\",\n  \"grant_type\": \"client_credentials\",\n  \"scope\": \"read write\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/oauth/token"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('1.7 Revoke Token', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "1.7 Revoke Token",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"client_id\": \"{{client_id}}\",\n  \"client_secret\": \"{{client_secret}}\",\n  \"token\": \"{{refresh_token}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/oauth/revoke"
+          }
+        }
+      ],
+      "name": "1. Auth Flow (run in order)"
+    },
+    {
+      "auth": {
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{access_token}}"
+          }
+        ],
+        "type": "bearer"
+      },
+      "description": "All requests use {{access_token}} from the Auth Flow. Run folder '1. Auth Flow' first.",
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Create User - success', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    var json = pm.response.json();",
+                  "    pm.collectionVariables.set('user_id', json.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Create User",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"stefan@example.com\",\n  \"name\": \"Stefan Simic\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{gateway_url}}/api/v1/users"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('List Users', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Get User by ID', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users/{{user_id}}"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Update User', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Update User",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Stefan S. Updated\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "PUT",
+            "url": "{{gateway_url}}/api/v1/users/{{user_id}}"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Delete User', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "url": "{{gateway_url}}/api/v1/users/{{user_id}}"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Get Deleted User (expect 404)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Get Deleted User (expect 404)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users/{{user_id}}"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Get Nonexistent User (expect 404)', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Get Nonexistent User (expect 404)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users/999999"
+          }
+        }
+      ],
+      "name": "2. User CRUD (requires token)"
+    },
+    {
+      "description": "Negative test cases - validation, auth errors, conflicts.",
+      "item": [
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Register - Duplicate Email (409)', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Register - Duplicate Email (409)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{test_email}}\",\n  \"password\": \"{{test_password}}\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Register - Short Password (400)', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Register - Short Password (400)",
+          "request": {
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"short@test.com\",\n  \"password\": \"123\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{auth_url}}/api/v1/auth/register"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Users - No Token (401)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Users - No Token (401)",
+          "request": {
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Users - Invalid Token (401)', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Users - Invalid Token (401)",
+          "request": {
+            "auth": {
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "invalid.token.here"
+                }
+              ],
+              "type": "bearer"
+            },
+            "method": "GET",
+            "url": "{{gateway_url}}/api/v1/users"
+          }
+        },
+        {
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Create User - Duplicate Email (409)', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "name": "Create User - Duplicate Email (409)",
+          "request": {
+            "auth": {
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}"
+                }
+              ],
+              "type": "bearer"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"stefan@example.com\",\n  \"name\": \"Duplicate\"\n}"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "url": "{{gateway_url}}/api/v1/users"
+          }
+        }
+      ],
+      "name": "3. Error Cases"
+    }
+  ],
+  "variable": [
+    {
+      "key": "state",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "test_password",
+      "type": "string",
+      "value": "password123"
+    },
+    {
+      "key": "code_challenge",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "client_secret",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "test_email",
+      "type": "string",
+      "value": "stefan@test.com"
+    },
+    {
+      "key": "client_id",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "gateway_url",
+      "type": "string",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "auth_code",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "code_verifier",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "type": "string",
+      "value": ""
+    },
+    {
+      "key": "user_url",
+      "type": "string",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "auth_url",
+      "type": "string",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "user_id",
+      "type": "string",
+      "value": ""
+    }
+  ]
+}

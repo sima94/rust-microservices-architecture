@@ -1,0 +1,28 @@
+[package]
+name = "auth-service"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+actix-web = { workspace = true }
+dotenvy = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+argon2 = "0.5"
+jsonwebtoken = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+hex = "0.4"
+rdkafka = { workspace = true }
+tokio = { workspace = true }
+redis = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+actix-web-prom = { workspace = true }
+
+[dev-dependencies]
+actix-rt = { workspace = true }
