@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse};
 use crate::cache::RedisPool;
 use crate::db::DbPools;
+use actix_web::{HttpResponse, web};
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.route("/health", web::get().to(health_check));
@@ -14,10 +14,7 @@ pub fn init_routes(cfg: &mut web::ServiceConfig) {
         (status = 503, description = "Service degraded")
     )
 )]
-pub async fn health_check(
-    pools: web::Data<DbPools>,
-    redis: web::Data<RedisPool>,
-) -> HttpResponse {
+pub async fn health_check(pools: web::Data<DbPools>, redis: web::Data<RedisPool>) -> HttpResponse {
     let write_ok = pools.write.acquire().await.is_ok();
     let read_ok = pools.read.acquire().await.is_ok();
     let redis_ok = {

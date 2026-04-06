@@ -1,12 +1,12 @@
-use actix_web::web;
-use argon2::{Argon2, PasswordHasher, PasswordVerifier};
-use argon2::password_hash::{SaltString, PasswordHash};
-use rand::rngs::OsRng;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
-use crate::models::{AuthUser, NewAuthUser};
 use crate::models::dto::{RegisterRequest, RegisterResponse};
+use crate::models::{AuthUser, NewAuthUser};
 use crate::repositories::auth_user_repository::AuthUserRepository;
+use actix_web::web;
+use argon2::password_hash::{PasswordHash, SaltString};
+use argon2::{Argon2, PasswordHasher, PasswordVerifier};
+use rand::rngs::OsRng;
 
 pub struct AuthService;
 
@@ -16,7 +16,9 @@ impl AuthService {
         req: RegisterRequest,
     ) -> Result<RegisterResponse, ServiceError> {
         if req.password.len() < 8 {
-            return Err(ServiceError::InvalidRequest("Password must be at least 8 characters".into()));
+            return Err(ServiceError::InvalidRequest(
+                "Password must be at least 8 characters".into(),
+            ));
         }
 
         let salt = SaltString::generate(&mut OsRng);

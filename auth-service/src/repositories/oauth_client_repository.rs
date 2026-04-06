@@ -1,10 +1,13 @@
+use crate::models::{NewOAuthClient, OAuthClient};
 use sqlx::PgPool;
-use crate::models::{OAuthClient, NewOAuthClient};
 
 pub struct OAuthClientRepository;
 
 impl OAuthClientRepository {
-    pub async fn create(pool: &PgPool, new_client: NewOAuthClient) -> Result<OAuthClient, sqlx::Error> {
+    pub async fn create(
+        pool: &PgPool,
+        new_client: NewOAuthClient,
+    ) -> Result<OAuthClient, sqlx::Error> {
         sqlx::query_as::<_, OAuthClient>(
             "INSERT INTO oauth_clients (client_id, client_secret_hash, client_name, redirect_uri, scopes) VALUES ($1, $2, $3, $4, $5) RETURNING id, client_id, client_secret_hash, client_name, redirect_uri, scopes, created_at"
         )
@@ -33,8 +36,7 @@ mod tests {
 
     async fn get_test_pool() -> PgPool {
         dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         sqlx::PgPool::connect(&url)
             .await
             .expect("Failed to connect to test database")

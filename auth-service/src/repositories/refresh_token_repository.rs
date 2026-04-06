@@ -1,10 +1,13 @@
+use crate::models::refresh_token::{NewRefreshToken, RefreshToken};
 use sqlx::PgPool;
-use crate::models::refresh_token::{RefreshToken, NewRefreshToken};
 
 pub struct RefreshTokenRepository;
 
 impl RefreshTokenRepository {
-    pub async fn create(pool: &PgPool, new_token: NewRefreshToken) -> Result<RefreshToken, sqlx::Error> {
+    pub async fn create(
+        pool: &PgPool,
+        new_token: NewRefreshToken,
+    ) -> Result<RefreshToken, sqlx::Error> {
         sqlx::query_as::<_, RefreshToken>(
             "INSERT INTO refresh_tokens (token, client_id, user_id, scopes, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING id, token, client_id, user_id, scopes, expires_at, created_at"
         )
@@ -17,7 +20,10 @@ impl RefreshTokenRepository {
             .await
     }
 
-    pub async fn find_by_token(pool: &PgPool, token_val: &str) -> Result<RefreshToken, sqlx::Error> {
+    pub async fn find_by_token(
+        pool: &PgPool,
+        token_val: &str,
+    ) -> Result<RefreshToken, sqlx::Error> {
         sqlx::query_as::<_, RefreshToken>(
             "SELECT id, token, client_id, user_id, scopes, expires_at, created_at FROM refresh_tokens WHERE token = $1"
         )
@@ -46,13 +52,12 @@ impl RefreshTokenRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use crate::models::AuthUser;
+    use chrono::Utc;
 
     async fn get_test_pool() -> PgPool {
         dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         sqlx::PgPool::connect(&url)
             .await
             .expect("Failed to connect to test database")

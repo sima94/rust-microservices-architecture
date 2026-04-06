@@ -1,6 +1,6 @@
-use actix_web::{web, HttpResponse};
 use crate::cache::RedisPool;
 use crate::db::DbPools;
+use actix_web::{HttpResponse, web};
 
 pub async fn health_check(
     pools: web::Data<DbPools>,

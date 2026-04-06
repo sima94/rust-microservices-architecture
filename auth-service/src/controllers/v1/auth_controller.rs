@@ -1,16 +1,13 @@
-use actix_web::{web, HttpResponse};
-use rdkafka::producer::FutureProducer;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
 use crate::models::dto::{RegisterRequest, RegisterResponse};
 use crate::services::auth_service::AuthService;
 use crate::services::kafka_service::{UserEvent, publish_user_event};
+use actix_web::{HttpResponse, web};
+use rdkafka::producer::FutureProducer;
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/auth")
-            .route("/register", web::post().to(register)),
-    );
+    cfg.service(web::scope("/auth").route("/register", web::post().to(register)));
 }
 
 #[utoipa::path(

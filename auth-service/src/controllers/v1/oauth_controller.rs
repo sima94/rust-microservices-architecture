@@ -1,10 +1,10 @@
-use actix_web::{web, HttpResponse};
 use crate::cache::RedisPool;
 use crate::config::AppConfig;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
 use crate::models::dto::*;
 use crate::services::oauth_service::OAuthService;
+use actix_web::{HttpResponse, web};
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -32,7 +32,8 @@ pub async fn authorize(
     params: web::Query<AuthorizeParams>,
     json: web::Json<LoginRequest>,
 ) -> Result<HttpResponse, ServiceError> {
-    let response = OAuthService::authorize(pools, redis, params.into_inner(), json.into_inner()).await?;
+    let response =
+        OAuthService::authorize(pools, redis, params.into_inner(), json.into_inner()).await?;
     Ok(HttpResponse::Ok().json(response))
 }
 

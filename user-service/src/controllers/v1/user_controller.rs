@@ -1,11 +1,11 @@
-use actix_web::{web, HttpResponse};
 use crate::cache::RedisPool;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
-use crate::models::{User, NewUser, UpdateUser};
-use crate::services::user_service::UserService;
 use crate::middleware::jwt_auth::AuthenticatedUser;
 use crate::middleware::scopes::require_scope;
+use crate::models::{NewUser, UpdateUser, User};
+use crate::services::user_service::UserService;
+use actix_web::{HttpResponse, web};
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(

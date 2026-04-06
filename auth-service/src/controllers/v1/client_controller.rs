@@ -1,15 +1,12 @@
-use actix_web::{web, HttpResponse};
 use crate::cache::RedisPool;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
 use crate::models::dto::{ClientRegisterRequest, ClientRegisterResponse};
 use crate::services::oauth_service::OAuthService;
+use actix_web::{HttpResponse, web};
 
 pub fn init_routes(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/clients")
-            .route("/register", web::post().to(register_client)),
-    );
+    cfg.service(web::scope("/clients").route("/register", web::post().to(register_client)));
 }
 
 #[utoipa::path(

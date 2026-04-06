@@ -3,8 +3,8 @@ use actix_web_prom::PrometheusMetricsBuilder;
 use auth_service::{cache, config::AppConfig, controllers, db};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::ClientConfig;
+use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::producer::FutureProducer;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -201,9 +201,7 @@ async fn test_oauth_authorization_code_flow() {
 
     let authorize_uri = format!(
         "/api/v1/oauth/authorize?response_type=code&client_id={}&redirect_uri={}&scope=read&state=state-123&code_challenge={}&code_challenge_method=S256",
-        client_id,
-        redirect_uri,
-        code_challenge
+        client_id, redirect_uri, code_challenge
     );
 
     let authorize_req = test::TestRequest::post()
@@ -312,9 +310,7 @@ async fn test_oauth_token_reuse_authorization_code_returns_400() {
 
     let authorize_uri = format!(
         "/api/v1/oauth/authorize?response_type=code&client_id={}&redirect_uri={}&scope=read&state=state-xyz&code_challenge={}&code_challenge_method=S256",
-        client_id,
-        redirect_uri,
-        code_challenge
+        client_id, redirect_uri, code_challenge
     );
 
     let authorize_req = test::TestRequest::post()
@@ -366,9 +362,7 @@ async fn test_oauth_token_reuse_authorization_code_returns_400() {
 async fn test_metrics_endpoint() {
     let app = setup_app!();
 
-    let req = test::TestRequest::get()
-        .uri("/metrics")
-        .to_request();
+    let req = test::TestRequest::get().uri("/metrics").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 200);
 }

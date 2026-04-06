@@ -1,5 +1,5 @@
-pub mod db;
 pub mod cache;
+pub mod db;
 pub mod errors;
 pub mod health;
 pub mod middleware;

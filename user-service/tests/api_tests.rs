@@ -1,11 +1,11 @@
-use actix_web::{test, web, App};
+use actix_web::{App, test, web};
 use actix_web_prom::PrometheusMetricsBuilder;
-use user_service::{db, cache, controllers};
+use user_service::{cache, controllers, db};
 
 const TEST_JWT_SECRET: &str = "test-secret-for-integration-tests";
 
 fn create_test_token(scopes: &str) -> String {
-    use jsonwebtoken::{encode, Header, EncodingKey};
+    use jsonwebtoken::{EncodingKey, Header, encode};
     use serde::Serialize;
 
     #[derive(Serialize)]
@@ -27,8 +27,12 @@ fn create_test_token(scopes: &str) -> String {
         exp: now + 3600,
         iat: now,
     };
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(TEST_JWT_SECRET.as_bytes()))
-        .unwrap()
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(TEST_JWT_SECRET.as_bytes()),
+    )
+    .unwrap()
 }
 
 macro_rules! setup_app {
@@ -52,8 +56,7 @@ macro_rules! setup_app {
                 .app_data(web::Data::new(redis))
                 .app_data(web::Data::new(jwt_secret))
                 .service(
-                    web::scope("/api/v1")
-                        .configure(controllers::v1::user_controller::init_routes),
+                    web::scope("/api/v1").configure(controllers::v1::user_controller::init_routes),
                 ),
         )
         .await
@@ -193,9 +196,7 @@ async fn test_get_nonexistent_user() {
 async fn test_unauthorized_without_token() {
     let app = setup_app!();
 
-    let req = test::TestRequest::get()
-        .uri("/api/v1/users")
-        .to_request();
+    let req = test::TestRequest::get().uri("/api/v1/users").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 401);
 }
@@ -204,9 +205,7 @@ async fn test_unauthorized_without_token() {
 async fn test_metrics_endpoint() {
     let app = setup_app!();
 
-    let req = test::TestRequest::get()
-        .uri("/metrics")
-        .to_request();
+    let req = test::TestRequest::get().uri("/metrics").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), 200);
 }

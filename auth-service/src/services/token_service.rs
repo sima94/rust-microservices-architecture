@@ -1,6 +1,6 @@
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey};
-use chrono::Utc;
 use crate::models::Claims;
+use chrono::Utc;
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 
 pub struct TokenService;
 
@@ -22,10 +22,17 @@ impl TokenService {
             exp: now + ttl_secs as usize,
             iat: now,
         };
-        encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
+        encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
     }
 
-    pub fn validate_token(token: &str, secret: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
+    pub fn validate_token(
+        token: &str,
+        secret: &str,
+    ) -> Result<Claims, jsonwebtoken::errors::Error> {
         let token_data = decode::<Claims>(
             token,
             &DecodingKey::from_secret(secret.as_bytes()),
@@ -48,9 +55,14 @@ mod tests {
     #[test]
     fn test_create_and_validate_token() {
         let token = TokenService::create_access_token(
-            "123", Some("test@example.com"), "client-1", "read write",
-            TEST_SECRET, 300,
-        ).unwrap();
+            "123",
+            Some("test@example.com"),
+            "client-1",
+            "read write",
+            TEST_SECRET,
+            300,
+        )
+        .unwrap();
 
         let claims = TokenService::validate_token(&token, TEST_SECRET).unwrap();
         assert_eq!(claims.sub, "123");
@@ -61,9 +73,9 @@ mod tests {
 
     #[test]
     fn test_validate_with_wrong_secret_fails() {
-        let token = TokenService::create_access_token(
-            "123", None, "client-1", "read", TEST_SECRET, 300,
-        ).unwrap();
+        let token =
+            TokenService::create_access_token("123", None, "client-1", "read", TEST_SECRET, 300)
+                .unwrap();
 
         let result = TokenService::validate_token(&token, "wrong-secret");
         assert!(result.is_err());
@@ -84,7 +96,8 @@ mod tests {
             &jsonwebtoken::Header::default(),
             &claims,
             &jsonwebtoken::EncodingKey::from_secret(TEST_SECRET.as_bytes()),
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = TokenService::validate_token(&token, TEST_SECRET);
         assert!(result.is_err());

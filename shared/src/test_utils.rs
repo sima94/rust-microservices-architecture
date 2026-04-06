@@ -1,14 +1,13 @@
-use jsonwebtoken::{encode, Header, EncodingKey};
-use serde::Serialize;
 use crate::db::{DbPool, DbPools};
+use jsonwebtoken::{EncodingKey, Header, encode};
+use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 
 pub const TEST_JWT_SECRET: &str = "test-secret-for-integration-tests";
 
 pub async fn get_test_pool() -> DbPool {
     dotenvy::dotenv().ok();
-    let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set for tests");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
 
     PgPoolOptions::new()
         .max_connections(5)
@@ -49,6 +48,10 @@ pub fn create_test_token_with_secret(scopes: &str, secret: &str) -> String {
         exp: now + 3600,
         iat: now,
     };
-    encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
-        .unwrap()
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .unwrap()
 }

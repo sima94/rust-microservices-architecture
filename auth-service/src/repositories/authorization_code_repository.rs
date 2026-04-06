@@ -1,10 +1,13 @@
-use sqlx::PgPool;
 use crate::models::authorization_code::{AuthorizationCode, NewAuthorizationCode};
+use sqlx::PgPool;
 
 pub struct AuthorizationCodeRepository;
 
 impl AuthorizationCodeRepository {
-    pub async fn create(pool: &PgPool, new_code: NewAuthorizationCode) -> Result<AuthorizationCode, sqlx::Error> {
+    pub async fn create(
+        pool: &PgPool,
+        new_code: NewAuthorizationCode,
+    ) -> Result<AuthorizationCode, sqlx::Error> {
         sqlx::query_as::<_, AuthorizationCode>(
             "INSERT INTO authorization_codes (code, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, code, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at, used, created_at"
         )
@@ -20,7 +23,10 @@ impl AuthorizationCodeRepository {
             .await
     }
 
-    pub async fn find_by_code(pool: &PgPool, code_val: &str) -> Result<AuthorizationCode, sqlx::Error> {
+    pub async fn find_by_code(
+        pool: &PgPool,
+        code_val: &str,
+    ) -> Result<AuthorizationCode, sqlx::Error> {
         sqlx::query_as::<_, AuthorizationCode>(
             "SELECT id, code, client_id, user_id, redirect_uri, scopes, code_challenge, code_challenge_method, expires_at, used, created_at FROM authorization_codes WHERE code = $1"
         )
@@ -41,13 +47,12 @@ impl AuthorizationCodeRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use crate::models::AuthUser;
+    use chrono::Utc;
 
     async fn get_test_pool() -> PgPool {
         dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         sqlx::PgPool::connect(&url)
             .await
             .expect("Failed to connect to test database")

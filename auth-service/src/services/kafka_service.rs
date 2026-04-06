@@ -1,5 +1,5 @@
-use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::ClientConfig;
+use rdkafka::producer::{FutureProducer, FutureRecord};
 use serde::Serialize;
 use std::time::Duration;
 
@@ -23,13 +23,11 @@ pub async fn publish_user_event(
     topic: &str,
     event: &UserEvent,
 ) -> Result<(), String> {
-    let payload = serde_json::to_string(event)
-        .map_err(|e| format!("Serialization error: {}", e))?;
+    let payload =
+        serde_json::to_string(event).map_err(|e| format!("Serialization error: {}", e))?;
 
     let key = event.user_id.to_string();
-    let record = FutureRecord::to(topic)
-        .key(&key)
-        .payload(&payload);
+    let record = FutureRecord::to(topic).key(&key).payload(&payload);
 
     producer
         .send(record, Duration::from_secs(5))

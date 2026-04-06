@@ -1,10 +1,10 @@
 use actix_web::{App, HttpServer, web};
 use actix_web_prom::PrometheusMetricsBuilder;
+use auth_service::models::dto::*;
+use auth_service::{cache, config::AppConfig, controllers, db, services::kafka_service};
 use dotenvy::dotenv;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use auth_service::{db, cache, controllers, config::AppConfig, services::kafka_service};
-use auth_service::models::dto::*;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -48,8 +48,8 @@ async fn main() -> std::io::Result<()> {
 
     let app_config = AppConfig::from_env();
 
-    let kafka_broker = std::env::var("KAFKA_BROKER")
-        .unwrap_or_else(|_| "localhost:9092".to_string());
+    let kafka_broker =
+        std::env::var("KAFKA_BROKER").unwrap_or_else(|_| "localhost:9092".to_string());
     println!("Connecting to Kafka broker at {kafka_broker}");
     let kafka_producer = kafka_service::create_producer(&kafka_broker);
 

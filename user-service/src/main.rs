@@ -1,13 +1,13 @@
 use actix_web::{App, HttpServer, web};
 use actix_web_prom::PrometheusMetricsBuilder;
 use dotenvy::dotenv;
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::watch;
+use user_service::models::{NewUser, UpdateUser, User};
+use user_service::{cache, controllers, db, kafka};
 use utoipa::OpenApi;
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa_swagger_ui::SwaggerUi;
-use user_service::{db, cache, controllers, kafka};
-use user_service::models::{User, NewUser, UpdateUser};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -55,11 +55,10 @@ async fn main() -> std::io::Result<()> {
     let redis_pool = cache::init_redis().await;
     println!("Redis connected");
 
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .expect("JWT_SECRET must be set");
+    let jwt_secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
 
-    let kafka_broker = std::env::var("KAFKA_BROKER")
-        .unwrap_or_else(|_| "localhost:9092".to_string());
+    let kafka_broker =
+        std::env::var("KAFKA_BROKER").unwrap_or_else(|_| "localhost:9092".to_string());
     println!("Connecting to Kafka broker at {kafka_broker}");
     let consumer = kafka::create_consumer(&kafka_broker, "user-service-group");
 
@@ -72,8 +71,8 @@ async fn main() -> std::io::Result<()> {
     });
 
     tokio::spawn(async move {
-        let mut sigterm = signal(SignalKind::terminate())
-            .expect("Failed to register SIGTERM handler");
+        let mut sigterm =
+            signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
         sigterm.recv().await;
         println!("SIGTERM received, signaling shutdown...");
         let _ = shutdown_tx.send(true);
@@ -95,10 +94,7 @@ async fn main() -> std::io::Result<()> {
                 SwaggerUi::new("/swagger-ui/{_:.*}")
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
-            .service(
-                web::scope("/api/v1")
-                    .configure(controllers::v1::user_controller::init_routes),
-            )
+            .service(web::scope("/api/v1").configure(controllers::v1::user_controller::init_routes))
     })
     .bind((ip, server_port))?
     .run()

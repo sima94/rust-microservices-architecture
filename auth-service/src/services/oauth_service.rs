@@ -1,23 +1,23 @@
-use actix_web::web;
-use argon2::{Argon2, PasswordVerifier};
-use argon2::password_hash::PasswordHash;
-use chrono::{Utc, Duration};
-use rand::Rng;
-use sha2::{Sha256, Digest};
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::Engine;
 use crate::cache::{self, RedisPool};
 use crate::config::AppConfig;
 use crate::db::DbPools;
 use crate::errors::ServiceError;
-use crate::models::{OAuthClient, NewOAuthClient, NewAuthorizationCode, NewRefreshToken};
 use crate::models::dto::*;
+use crate::models::{NewAuthorizationCode, NewOAuthClient, NewRefreshToken, OAuthClient};
 use crate::repositories::auth_user_repository::AuthUserRepository;
-use crate::repositories::oauth_client_repository::OAuthClientRepository;
 use crate::repositories::authorization_code_repository::AuthorizationCodeRepository;
+use crate::repositories::oauth_client_repository::OAuthClientRepository;
 use crate::repositories::refresh_token_repository::RefreshTokenRepository;
 use crate::services::auth_service::AuthService;
 use crate::services::token_service::TokenService;
+use actix_web::web;
+use argon2::password_hash::PasswordHash;
+use argon2::{Argon2, PasswordVerifier};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use chrono::{Duration, Utc};
+use rand::Rng;
+use sha2::{Digest, Sha256};
 
 pub struct OAuthService;
 
@@ -83,7 +83,12 @@ impl OAuthService {
             .map_err(ServiceError::from)?;
 
         // Cache the new client
-        cache::set_cached(&redis, &cache::oauth_client_cache_key(&client.client_id), &client).await;
+        cache::set_cached(
+            &redis,
+            &cache::oauth_client_cache_key(&client.client_id),
+            &client,
+        )
+        .await;
 
         Ok(ClientRegisterResponse {
             client_id: client.client_id,
@@ -102,10 +107,14 @@ impl OAuthService {
         login: LoginRequest,
     ) -> Result<AuthorizeResponse, ServiceError> {
         if params.response_type != "code" {
-            return Err(ServiceError::InvalidRequest("response_type must be 'code'".into()));
+            return Err(ServiceError::InvalidRequest(
+                "response_type must be 'code'".into(),
+            ));
         }
         if params.code_challenge_method != "S256" {
-            return Err(ServiceError::InvalidRequest("code_challenge_method must be 'S256'".into()));
+            return Err(ServiceError::InvalidRequest(
+                "code_challenge_method must be 'S256'".into(),
+            ));
         }
 
         // Validate client (cached)
@@ -155,10 +164,17 @@ impl OAuthService {
         req: TokenRequest,
     ) -> Result<TokenResponse, ServiceError> {
         match req.grant_type.as_str() {
-            "authorization_code" => Self::exchange_authorization_code(pools, redis, config, req).await,
-            "client_credentials" => Self::exchange_client_credentials(pools, redis, config, req).await,
+            "authorization_code" => {
+                Self::exchange_authorization_code(pools, redis, config, req).await
+            }
+            "client_credentials" => {
+                Self::exchange_client_credentials(pools, redis, config, req).await
+            }
             "refresh_token" => Self::exchange_refresh_token(pools, redis, config, req).await,
-            _ => Err(ServiceError::InvalidRequest(format!("Unsupported grant_type: {}", req.grant_type))),
+            _ => Err(ServiceError::InvalidRequest(format!(
+                "Unsupported grant_type: {}",
+                req.grant_type
+            ))),
         }
     }
 
@@ -168,11 +184,17 @@ impl OAuthService {
         config: web::Data<AppConfig>,
         req: TokenRequest,
     ) -> Result<TokenResponse, ServiceError> {
-        let code_val = req.code.as_deref()
+        let code_val = req
+            .code
+            .as_deref()
             .ok_or_else(|| ServiceError::InvalidRequest("Missing 'code'".into()))?;
-        let redirect = req.redirect_uri.as_deref()
+        let redirect = req
+            .redirect_uri
+            .as_deref()
             .ok_or_else(|| ServiceError::InvalidRequest("Missing 'redirect_uri'".into()))?;
-        let verifier = req.code_verifier.as_deref()
+        let verifier = req
+            .code_verifier
+            .as_deref()
             .ok_or_else(|| ServiceError::InvalidRequest("Missing 'code_verifier'".into()))?;
 
         // Read operations (cached)
@@ -184,10 +206,14 @@ impl OAuthService {
             .map_err(|_| ServiceError::InvalidGrant("Invalid authorization code".into()))?;
 
         if auth_code.used {
-            return Err(ServiceError::InvalidGrant("Authorization code already used".into()));
+            return Err(ServiceError::InvalidGrant(
+                "Authorization code already used".into(),
+            ));
         }
         if auth_code.expires_at < Utc::now().naive_utc() {
-            return Err(ServiceError::InvalidGrant("Authorization code expired".into()));
+            return Err(ServiceError::InvalidGrant(
+                "Authorization code expired".into(),
+            ));
         }
         if auth_code.client_id != req.client_id {
             return Err(ServiceError::InvalidGrant("client_id mismatch".into()));
@@ -201,7 +227,9 @@ impl OAuthService {
         hasher.update(verifier.as_bytes());
         let computed_challenge = URL_SAFE_NO_PAD.encode(hasher.finalize());
         if computed_challenge != auth_code.code_challenge {
-            return Err(ServiceError::InvalidGrant("PKCE verification failed".into()));
+            return Err(ServiceError::InvalidGrant(
+                "PKCE verification failed".into(),
+            ));
         }
 
         // Write operations
@@ -220,18 +248,24 @@ impl OAuthService {
             &auth_code.scopes,
             &config.jwt_secret,
             config.access_token_ttl_secs,
-        ).map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
+        )
+        .map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
 
         let refresh_token_str = TokenService::generate_refresh_token();
         let expires_at = (Utc::now() + Duration::days(config.refresh_token_ttl_days)).naive_utc();
 
-        RefreshTokenRepository::create(&pools.write, NewRefreshToken {
-            token: refresh_token_str.clone(),
-            client_id: req.client_id,
-            user_id: user.id,
-            scopes: auth_code.scopes.clone(),
-            expires_at,
-        }).await.map_err(ServiceError::from)?;
+        RefreshTokenRepository::create(
+            &pools.write,
+            NewRefreshToken {
+                token: refresh_token_str.clone(),
+                client_id: req.client_id,
+                user_id: user.id,
+                scopes: auth_code.scopes.clone(),
+                expires_at,
+            },
+        )
+        .await
+        .map_err(ServiceError::from)?;
 
         Ok(TokenResponse {
             access_token,
@@ -263,7 +297,8 @@ impl OAuthService {
             requested_scope,
             &config.jwt_secret,
             config.access_token_ttl_secs,
-        ).map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
+        )
+        .map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
 
         Ok(TokenResponse {
             access_token,
@@ -280,7 +315,9 @@ impl OAuthService {
         config: web::Data<AppConfig>,
         req: TokenRequest,
     ) -> Result<TokenResponse, ServiceError> {
-        let refresh_val = req.refresh_token.as_deref()
+        let refresh_val = req
+            .refresh_token
+            .as_deref()
             .ok_or_else(|| ServiceError::InvalidRequest("Missing 'refresh_token'".into()))?;
 
         // Read (cached)
@@ -292,7 +329,9 @@ impl OAuthService {
             .map_err(|_| ServiceError::InvalidGrant("Invalid refresh token".into()))?;
 
         if stored.expires_at < Utc::now().naive_utc() {
-            RefreshTokenRepository::delete_by_token(&pools.write, refresh_val).await.ok();
+            RefreshTokenRepository::delete_by_token(&pools.write, refresh_val)
+                .await
+                .ok();
             return Err(ServiceError::InvalidGrant("Refresh token expired".into()));
         }
         if stored.client_id != req.client_id {
@@ -315,18 +354,24 @@ impl OAuthService {
             &stored.scopes,
             &config.jwt_secret,
             config.access_token_ttl_secs,
-        ).map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
+        )
+        .map_err(|e| ServiceError::InternalError(format!("JWT error: {}", e)))?;
 
         let new_refresh = TokenService::generate_refresh_token();
         let expires_at = (Utc::now() + Duration::days(config.refresh_token_ttl_days)).naive_utc();
 
-        RefreshTokenRepository::create(&pools.write, NewRefreshToken {
-            token: new_refresh.clone(),
-            client_id: req.client_id,
-            user_id: user.id,
-            scopes: stored.scopes.clone(),
-            expires_at,
-        }).await.map_err(ServiceError::from)?;
+        RefreshTokenRepository::create(
+            &pools.write,
+            NewRefreshToken {
+                token: new_refresh.clone(),
+                client_id: req.client_id,
+                user_id: user.id,
+                scopes: stored.scopes.clone(),
+                expires_at,
+            },
+        )
+        .await
+        .map_err(ServiceError::from)?;
 
         Ok(TokenResponse {
             access_token,
@@ -346,7 +391,9 @@ impl OAuthService {
         let client = Self::find_client_cached(&pools, &redis, &req.client_id).await?;
         verify_client_secret(&req.client_secret, &client.client_secret_hash)?;
 
-        RefreshTokenRepository::delete_by_token(&pools.write, &req.token).await.ok();
+        RefreshTokenRepository::delete_by_token(&pools.write, &req.token)
+            .await
+            .ok();
 
         Ok(())
     }
@@ -367,7 +414,10 @@ fn validate_scopes(requested: &str, allowed: &str) -> Result<(), ServiceError> {
     let allowed_set: Vec<&str> = allowed.split_whitespace().collect();
     for scope in requested.split_whitespace() {
         if !allowed_set.contains(&scope) {
-            return Err(ServiceError::InvalidRequest(format!("Scope '{}' not allowed", scope)));
+            return Err(ServiceError::InvalidRequest(format!(
+                "Scope '{}' not allowed",
+                scope
+            )));
         }
     }
     Ok(())

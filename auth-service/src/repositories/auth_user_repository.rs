@@ -1,5 +1,5 @@
-use sqlx::PgPool;
 use crate::models::{AuthUser, NewAuthUser};
+use sqlx::PgPool;
 
 pub struct AuthUserRepository;
 
@@ -16,20 +16,20 @@ impl AuthUserRepository {
 
     pub async fn find_by_email(pool: &PgPool, user_email: &str) -> Result<AuthUser, sqlx::Error> {
         sqlx::query_as::<_, AuthUser>(
-            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1"
+            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1",
         )
-            .bind(user_email)
-            .fetch_one(pool)
-            .await
+        .bind(user_email)
+        .fetch_one(pool)
+        .await
     }
 
     pub async fn find_by_id(pool: &PgPool, user_id_val: i32) -> Result<AuthUser, sqlx::Error> {
         sqlx::query_as::<_, AuthUser>(
-            "SELECT id, email, password_hash, created_at FROM auth_users WHERE id = $1"
+            "SELECT id, email, password_hash, created_at FROM auth_users WHERE id = $1",
         )
-            .bind(user_id_val)
-            .fetch_one(pool)
-            .await
+        .bind(user_id_val)
+        .fetch_one(pool)
+        .await
     }
 }
 
@@ -39,8 +39,7 @@ mod tests {
 
     async fn get_test_pool() -> PgPool {
         dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         sqlx::PgPool::connect(&url)
             .await
             .expect("Failed to connect to test database")
@@ -69,12 +68,12 @@ mod tests {
         assert_eq!(created.password_hash, "hashed_password_123");
 
         let found = sqlx::query_as::<_, AuthUser>(
-            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1"
+            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1",
         )
-            .bind(&unique_email)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap();
+        .bind(&unique_email)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
         assert_eq!(found.id, created.id);
         assert_eq!(found.email, unique_email);
 
@@ -96,12 +95,12 @@ mod tests {
             .unwrap();
 
         let found = sqlx::query_as::<_, AuthUser>(
-            "SELECT id, email, password_hash, created_at FROM auth_users WHERE id = $1"
+            "SELECT id, email, password_hash, created_at FROM auth_users WHERE id = $1",
         )
-            .bind(created.id)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap();
+        .bind(created.id)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
         assert_eq!(found.email, "findbyid@example.com");
 
         tx.rollback().await.unwrap();
@@ -135,11 +134,11 @@ mod tests {
     async fn test_find_nonexistent_email() {
         let pool = get_test_pool().await;
         let result = sqlx::query_as::<_, AuthUser>(
-            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1"
+            "SELECT id, email, password_hash, created_at FROM auth_users WHERE email = $1",
         )
-            .bind("nonexistent@example.com")
-            .fetch_one(&pool)
-            .await;
+        .bind("nonexistent@example.com")
+        .fetch_one(&pool)
+        .await;
         assert!(result.is_err());
     }
 }

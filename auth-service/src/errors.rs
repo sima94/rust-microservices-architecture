@@ -29,27 +29,21 @@ impl fmt::Display for ServiceError {
 impl ResponseError for ServiceError {
     fn error_response(&self) -> HttpResponse {
         match self {
-            ServiceError::NotFound => HttpResponse::NotFound().json(
-                serde_json::json!({"error": "not_found"}),
-            ),
-            ServiceError::InternalError(msg) => HttpResponse::InternalServerError().json(
-                serde_json::json!({"error": "server_error", "error_description": msg}),
-            ),
-            ServiceError::Unauthorized(msg) => HttpResponse::Unauthorized().json(
-                serde_json::json!({"error": "access_denied", "error_description": msg}),
-            ),
-            ServiceError::Conflict(msg) => HttpResponse::Conflict().json(
-                serde_json::json!({"error": "conflict", "error_description": msg}),
-            ),
-            ServiceError::InvalidClient(msg) => HttpResponse::Unauthorized().json(
-                serde_json::json!({"error": "invalid_client", "error_description": msg}),
-            ),
-            ServiceError::InvalidGrant(msg) => HttpResponse::BadRequest().json(
-                serde_json::json!({"error": "invalid_grant", "error_description": msg}),
-            ),
-            ServiceError::InvalidRequest(msg) => HttpResponse::BadRequest().json(
-                serde_json::json!({"error": "invalid_request", "error_description": msg}),
-            ),
+            ServiceError::NotFound => {
+                HttpResponse::NotFound().json(serde_json::json!({"error": "not_found"}))
+            }
+            ServiceError::InternalError(msg) => HttpResponse::InternalServerError()
+                .json(serde_json::json!({"error": "server_error", "error_description": msg})),
+            ServiceError::Unauthorized(msg) => HttpResponse::Unauthorized()
+                .json(serde_json::json!({"error": "access_denied", "error_description": msg})),
+            ServiceError::Conflict(msg) => HttpResponse::Conflict()
+                .json(serde_json::json!({"error": "conflict", "error_description": msg})),
+            ServiceError::InvalidClient(msg) => HttpResponse::Unauthorized()
+                .json(serde_json::json!({"error": "invalid_client", "error_description": msg})),
+            ServiceError::InvalidGrant(msg) => HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "invalid_grant", "error_description": msg})),
+            ServiceError::InvalidRequest(msg) => HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "invalid_request", "error_description": msg})),
         }
     }
 }

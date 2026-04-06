@@ -1,5 +1,5 @@
-use serde::Serialize;
 use chrono::NaiveDateTime;
+use serde::Serialize;
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct AuthUser {

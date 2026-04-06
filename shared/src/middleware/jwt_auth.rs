@@ -1,8 +1,8 @@
-use actix_web::{web, HttpRequest, FromRequest, dev::Payload};
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use crate::errors::ServiceError;
+use actix_web::{FromRequest, HttpRequest, dev::Payload, web};
+use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use std::future::{Ready, ready};
-use crate::errors::ServiceError;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
@@ -31,7 +31,8 @@ impl FromRequest for AuthenticatedUser {
 }
 
 fn extract_user(req: &HttpRequest) -> Result<AuthenticatedUser, ServiceError> {
-    let jwt_secret = req.app_data::<web::Data<String>>()
+    let jwt_secret = req
+        .app_data::<web::Data<String>>()
         .ok_or_else(|| ServiceError::InternalError("JWT secret not configured".into()))?;
 
     let auth_header = req
@@ -40,9 +41,9 @@ fn extract_user(req: &HttpRequest) -> Result<AuthenticatedUser, ServiceError> {
         .and_then(|v| v.to_str().ok())
         .ok_or_else(|| ServiceError::Unauthorized("Missing Authorization header".into()))?;
 
-    let token = auth_header
-        .strip_prefix("Bearer ")
-        .ok_or_else(|| ServiceError::Unauthorized("Invalid Authorization format. Use: Bearer <token>".into()))?;
+    let token = auth_header.strip_prefix("Bearer ").ok_or_else(|| {
+        ServiceError::Unauthorized("Invalid Authorization format. Use: Bearer <token>".into())
+    })?;
 
     let claims = decode::<Claims>(
         token,
@@ -56,6 +57,10 @@ fn extract_user(req: &HttpRequest) -> Result<AuthenticatedUser, ServiceError> {
         user_id: claims.sub,
         email: claims.email,
         client_id: claims.client_id,
-        scopes: claims.scopes.split_whitespace().map(|s| s.to_string()).collect(),
+        scopes: claims
+            .scopes
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect(),
     })
 }

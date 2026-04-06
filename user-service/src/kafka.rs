@@ -90,10 +90,7 @@ async fn handle_message(payload: &str, pool: &DbPool, redis: &RedisPool) {
 
             match UserRepository::create(pool, new_user).await {
                 Ok(user) => {
-                    println!(
-                        "Auto-created user profile: {} ({})",
-                        user.name, user.email
-                    );
+                    println!("Auto-created user profile: {} ({})", user.name, user.email);
                     // Cache the new user + invalidate list
                     cache::set_cached(redis, &cache::user_cache_key(user.id), &user).await;
                     cache::invalidate(redis, &cache::users_list_cache_key()).await;

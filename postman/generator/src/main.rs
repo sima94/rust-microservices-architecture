@@ -1,6 +1,6 @@
 use clap::Parser;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 // ── CLI ──────────────────────────────────────────────────────────────
 
 #[derive(Parser)]
-#[command(name = "postman-gen", about = "Generate Postman collection from OpenAPI + overlay")]
+#[command(
+    name = "postman-gen",
+    about = "Generate Postman collection from OpenAPI + overlay"
+)]
 struct Cli {
     /// Use cached OpenAPI specs instead of fetching from services
     #[arg(long)]
@@ -101,7 +104,9 @@ fn main() {
     let cli = Cli::parse();
 
     let postman_dir = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-    let overlay_path = cli.overlay.unwrap_or_else(|| postman_dir.join("overlay.json"));
+    let overlay_path = cli
+        .overlay
+        .unwrap_or_else(|| postman_dir.join("overlay.json"));
     let output_path = cli
         .output
         .unwrap_or_else(|| postman_dir.join("Rust_Microservices.postman_collection.json"));
@@ -109,8 +114,7 @@ fn main() {
 
     let overlay_text = fs::read_to_string(&overlay_path)
         .unwrap_or_else(|e| panic!("Cannot read {}: {e}", overlay_path.display()));
-    let overlay: Overlay =
-        serde_json::from_str(&overlay_text).expect("Invalid overlay.json");
+    let overlay: Overlay = serde_json::from_str(&overlay_text).expect("Invalid overlay.json");
     println!("Loaded overlay: {}", overlay_path.display());
 
     let specs = load_specs(&overlay.services, &cache_dir, cli.offline);
@@ -149,8 +153,9 @@ fn load_specs(
 
         let spec: Value = if offline {
             println!("Loading cached {name} spec...");
-            let text = fs::read_to_string(&cached)
-                .unwrap_or_else(|_| panic!("No cached spec for {name}. Run without --offline first."));
+            let text = fs::read_to_string(&cached).unwrap_or_else(|_| {
+                panic!("No cached spec for {name}. Run without --offline first.")
+            });
             serde_json::from_str(&text).expect("Invalid cached JSON")
         } else {
             println!("Fetching {name} OpenAPI from {}...", config.openapi_url);
@@ -188,7 +193,9 @@ fn parse_specs(specs: &HashMap<String, Value>) -> OperationMap {
         };
 
         for (path, methods) in paths {
-            let Some(methods) = methods.as_object() else { continue };
+            let Some(methods) = methods.as_object() else {
+                continue;
+            };
             for (method, details) in methods {
                 if !matches!(method.as_str(), "get" | "post" | "put" | "delete" | "patch") {
                     continue;
@@ -212,11 +219,14 @@ fn parse_specs(specs: &HashMap<String, Value>) -> OperationMap {
                     })
                     .map(String::from);
 
-                ops.insert(op_id.to_string(), OperationInfo {
-                    method: method.to_uppercase(),
-                    path: path.clone(),
-                    content_type,
-                });
+                ops.insert(
+                    op_id.to_string(),
+                    OperationInfo {
+                        method: method.to_uppercase(),
+                        path: path.clone(),
+                        content_type,
+                    },
+                );
             }
         }
         all_ops.insert(service.clone(), ops);
@@ -315,7 +325,10 @@ fn build_custom_request(rc: &RequestConfig) -> Value {
     let obj = req.as_object_mut().unwrap();
 
     if let Some(ct) = &rc.content_type {
-        obj.insert("header".into(), json!([{"key": "Content-Type", "value": ct}]));
+        obj.insert(
+            "header".into(),
+            json!([{"key": "Content-Type", "value": ct}]),
+        );
     }
     if let Some(body) = &rc.body {
         let ct = rc.content_type.as_deref().unwrap_or("application/json");
@@ -374,7 +387,10 @@ fn build_openapi_request(rc: &RequestConfig, operations: &OperationMap) -> Optio
 
     if let Some(body) = &rc.body {
         let ct = op.content_type.as_deref().unwrap_or("application/json");
-        obj.insert("header".into(), json!([{"key": "Content-Type", "value": ct}]));
+        obj.insert(
+            "header".into(),
+            json!([{"key": "Content-Type", "value": ct}]),
+        );
         obj.insert("body".into(), build_body(ct, body));
     }
     if let Some(auth) = &rc.auth {
@@ -434,7 +450,9 @@ fn build_test_script(rc: &RequestConfig) -> Vec<String> {
 
         for status in &accept[1..] {
             lines.push(format!("}} else if (pm.response.code === {status}) {{"));
-            lines.push(format!("    pm.test('{name} - already exists (OK)', function () {{"));
+            lines.push(format!(
+                "    pm.test('{name} - already exists (OK)', function () {{"
+            ));
             lines.push(format!("        pm.response.to.have.status({status});"));
             lines.push("    });".into());
         }

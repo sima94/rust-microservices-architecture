@@ -1,5 +1,5 @@
+use crate::models::{NewUser, UpdateUser, User};
 use sqlx::PgPool;
-use crate::models::{User, NewUser, UpdateUser};
 
 pub struct UserRepository;
 
@@ -19,15 +19,19 @@ impl UserRepository {
 
     pub async fn create(pool: &PgPool, new_user: NewUser) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
-            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email"
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email",
         )
-            .bind(&new_user.name)
-            .bind(&new_user.email)
-            .fetch_one(pool)
-            .await
+        .bind(&new_user.name)
+        .bind(&new_user.email)
+        .fetch_one(pool)
+        .await
     }
 
-    pub async fn update(pool: &PgPool, user_id_val: i32, changeset: UpdateUser) -> Result<User, sqlx::Error> {
+    pub async fn update(
+        pool: &PgPool,
+        user_id_val: i32,
+        changeset: UpdateUser,
+    ) -> Result<User, sqlx::Error> {
         sqlx::query_as::<_, User>(
             "UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email) WHERE id = $3 RETURNING id, name, email"
         )
@@ -53,8 +57,7 @@ mod tests {
 
     async fn get_test_pool() -> PgPool {
         dotenvy::dotenv().ok();
-        let url = std::env::var("DATABASE_URL")
-            .expect("DATABASE_URL must be set for tests");
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set for tests");
         sqlx::PgPool::connect(&url)
             .await
             .expect("Failed to connect to test database")
@@ -70,13 +73,13 @@ mod tests {
             email: "test_sqlx@example.com".into(),
         };
         let created = sqlx::query_as::<_, User>(
-            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email"
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email",
         )
-            .bind(&new.name)
-            .bind(&new.email)
-            .fetch_one(&mut *tx)
-            .await
-            .unwrap();
+        .bind(&new.name)
+        .bind(&new.email)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
 
         assert_eq!(created.name, "Test User");
         assert_eq!(created.email, "test_sqlx@example.com");
@@ -98,11 +101,17 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
 
         sqlx::query("INSERT INTO users (name, email) VALUES ($1, $2)")
-            .bind("User1").bind("u1_sqlx@test.com")
-            .execute(&mut *tx).await.unwrap();
+            .bind("User1")
+            .bind("u1_sqlx@test.com")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
         sqlx::query("INSERT INTO users (name, email) VALUES ($1, $2)")
-            .bind("User2").bind("u2_sqlx@test.com")
-            .execute(&mut *tx).await.unwrap();
+            .bind("User2")
+            .bind("u2_sqlx@test.com")
+            .execute(&mut *tx)
+            .await
+            .unwrap();
 
         let all = sqlx::query_as::<_, User>("SELECT id, name, email FROM users")
             .fetch_all(&mut *tx)
@@ -119,10 +128,13 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
 
         let created = sqlx::query_as::<_, User>(
-            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email"
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email",
         )
-            .bind("Original").bind("orig_sqlx@test.com")
-            .fetch_one(&mut *tx).await.unwrap();
+        .bind("Original")
+        .bind("orig_sqlx@test.com")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
 
         let updated = sqlx::query_as::<_, User>(
             "UPDATE users SET name = COALESCE($1, name), email = COALESCE($2, email) WHERE id = $3 RETURNING id, name, email"
@@ -144,19 +156,26 @@ mod tests {
         let mut tx = pool.begin().await.unwrap();
 
         let created = sqlx::query_as::<_, User>(
-            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email"
+            "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email",
         )
-            .bind("ToDelete").bind("del_sqlx@test.com")
-            .fetch_one(&mut *tx).await.unwrap();
+        .bind("ToDelete")
+        .bind("del_sqlx@test.com")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
 
         let result = sqlx::query("DELETE FROM users WHERE id = $1")
             .bind(created.id)
-            .execute(&mut *tx).await.unwrap();
+            .execute(&mut *tx)
+            .await
+            .unwrap();
         assert_eq!(result.rows_affected(), 1);
 
         let found = sqlx::query_as::<_, User>("SELECT id, name, email FROM users WHERE id = $1")
             .bind(created.id)
-            .fetch_optional(&mut *tx).await.unwrap();
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap();
         assert!(found.is_none());
 
         tx.rollback().await.unwrap();

@@ -1,9 +1,9 @@
-use actix_web::web;
 use crate::cache::{self, RedisPool};
 use crate::db::DbPools;
 use crate::errors::ServiceError;
-use crate::models::{User, NewUser, UpdateUser};
+use crate::models::{NewUser, UpdateUser, User};
 use crate::repositories::user_repository::UserRepository;
+use actix_web::web;
 
 pub struct UserService;
 

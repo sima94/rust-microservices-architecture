@@ -7,8 +7,7 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn from_env() -> Self {
         Self {
-            jwt_secret: std::env::var("JWT_SECRET")
-                .expect("JWT_SECRET must be set"),
+            jwt_secret: std::env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
             access_token_ttl_secs: std::env::var("ACCESS_TOKEN_TTL_SECS")
                 .unwrap_or_else(|_| "300".to_string())
                 .parse()
