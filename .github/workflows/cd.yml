@@ -2,12 +2,7 @@ name: CD
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'postman/**'
   workflow_dispatch:
     inputs:
       environment:
@@ -47,7 +42,6 @@ jobs:
     name: Build & Push
     runs-on: ubuntu-latest
     needs: determine-env
-    if: ${{ vars.DOCKER_REGISTRY != '' && secrets.DOCKER_USERNAME != '' }}
     strategy:
       matrix:
         service: [auth-service, user-service]
@@ -75,7 +69,6 @@ jobs:
     name: Deploy to ${{ needs.determine-env.outputs.environment }}
     runs-on: ubuntu-latest
     needs: [determine-env, build-push]
-    if: ${{ secrets.KUBECONFIG != '' }}
     environment: ${{ needs.determine-env.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
