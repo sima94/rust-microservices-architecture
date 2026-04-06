@@ -78,7 +78,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: "1.94.1"
           components: clippy, rustfmt
 
       - name: Cache cargo
@@ -113,8 +113,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
+      - name: Show Rust version
+        run: rustc --version && cargo clippy --version
+
       - name: Run clippy
-        run: cargo clippy --workspace --verbose -- -D warnings 2>&1
+        run: cargo clippy --workspace -- -D warnings
 
       - name: Run user-service tests
         env:
