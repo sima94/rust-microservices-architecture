@@ -19,6 +19,13 @@ set -euo pipefail
 #   OCI_LB_SUBNET_OCID     OCI public subnet OCID for LoadBalancer services
 #   LB_WAIT_TIMEOUT_SEC    Wait timeout for external IP (default: 600)
 #   WAIT_FOR_EXTERNAL_IP   true|false (default: true)
+#   DOCKER_REGISTRY        Image registry prefix (e.g. ghcr.io/owner). When set,
+#                          overrides microservice.image.repository via --set.
+#   IMAGE_TAG              Image tag to deploy. When set, overrides
+#                          microservice.image.tag via --set.
+#   IMAGE_PULL_SECRET      Name of an existing kubernetes.io/dockerconfigjson
+#                          secret in the target namespace used to pull images
+#                          (e.g. ghcr-pull for private GHCR packages).
 #   DRY_RUN                1 -> print commands only
 
 ENVIRONMENT="${1:-dev}"
@@ -30,6 +37,9 @@ SECRETS_FILE="${SECRETS_FILE:-${ROOT_DIR}/.secrets/${ENVIRONMENT}.env}"
 OCI_LB_SUBNET_OCID="${OCI_LB_SUBNET_OCID:-}"
 LB_WAIT_TIMEOUT_SEC="${LB_WAIT_TIMEOUT_SEC:-600}"
 WAIT_FOR_EXTERNAL_IP="${WAIT_FOR_EXTERNAL_IP:-true}"
+DOCKER_REGISTRY="${DOCKER_REGISTRY:-}"
+IMAGE_TAG="${IMAGE_TAG:-}"
+IMAGE_PULL_SECRET="${IMAGE_PULL_SECRET:-}"
 DRY_RUN="${DRY_RUN:-0}"
 
 AUTH_CHART_DIR="${ROOT_DIR}/auth-service/chart"
@@ -186,8 +196,12 @@ deploy_release() {
   local chart_dir="$2"
   local override_file="$3"
   local secrets_file="$4"
+  local image_repo="${5:-}"
+  local image_tag="${6:-}"
+  local image_pull_secret="${7:-}"
   local env_values_file="${chart_dir}/values-${ENVIRONMENT}.yaml"
   local -a values_args=("-f" "${chart_dir}/values.yaml")
+  local -a set_args=()
 
   if [[ -f "${env_values_file}" ]]; then
     values_args+=("-f" "${env_values_file}")
@@ -195,9 +209,19 @@ deploy_release() {
   values_args+=("-f" "${override_file}")
   values_args+=("-f" "${secrets_file}")
 
+  if [[ -n "${image_repo}" ]]; then
+    set_args+=("--set" "microservice.image.repository=${image_repo}")
+  fi
+  if [[ -n "${image_tag}" ]]; then
+    set_args+=("--set" "microservice.image.tag=${image_tag}")
+  fi
+  if [[ -n "${image_pull_secret}" ]]; then
+    set_args+=("--set" "microservice.imagePullSecrets[0].name=${image_pull_secret}")
+  fi
+
   if [[ "${DRY_RUN}" == "1" ]]; then
     echo "+ helm dependency update ${chart_dir}"
-    echo "+ SUPPRESS_LABEL_WARNING=True KUBECONFIG=${KUBECONFIG} helm upgrade --install ${release_name} ${chart_dir} -n ${K8S_NAMESPACE} --create-namespace ${values_args[*]}"
+    echo "+ SUPPRESS_LABEL_WARNING=True KUBECONFIG=${KUBECONFIG} helm upgrade --install ${release_name} ${chart_dir} -n ${K8S_NAMESPACE} --create-namespace ${values_args[*]} ${set_args[*]:-}"
     return 0
   fi
 
@@ -206,7 +230,8 @@ deploy_release() {
     "${release_name}" "${chart_dir}" \
     -n "${K8S_NAMESPACE}" \
     --create-namespace \
-    "${values_args[@]}"
+    "${values_args[@]}" \
+    ${set_args[@]+"${set_args[@]}"}
 }
 
 wait_for_external_ip() {
@@ -272,8 +297,15 @@ if [[ "${EXPOSE_PUBLIC}" == "true" ]]; then
   fi
 fi
 
-deploy_release "auth-service" "${AUTH_CHART_DIR}" "${OVERRIDE_VALUES_FILE}" "${AUTH_SECRETS_VALUES_FILE}"
-deploy_release "user-service" "${USER_CHART_DIR}" "${OVERRIDE_VALUES_FILE}" "${USER_SECRETS_VALUES_FILE}"
+AUTH_IMAGE_REPO=""
+USER_IMAGE_REPO=""
+if [[ -n "${DOCKER_REGISTRY}" ]]; then
+  AUTH_IMAGE_REPO="${DOCKER_REGISTRY}/auth-service"
+  USER_IMAGE_REPO="${DOCKER_REGISTRY}/user-service"
+fi
+
+deploy_release "auth-service" "${AUTH_CHART_DIR}" "${OVERRIDE_VALUES_FILE}" "${AUTH_SECRETS_VALUES_FILE}" "${AUTH_IMAGE_REPO}" "${IMAGE_TAG}" "${IMAGE_PULL_SECRET}"
+deploy_release "user-service" "${USER_CHART_DIR}" "${OVERRIDE_VALUES_FILE}" "${USER_SECRETS_VALUES_FILE}" "${USER_IMAGE_REPO}" "${IMAGE_TAG}" "${IMAGE_PULL_SECRET}"
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   echo "+ SUPPRESS_LABEL_WARNING=True KUBECONFIG=${KUBECONFIG} kubectl -n ${K8S_NAMESPACE} rollout status deployment/auth-service --timeout=180s"

@@ -5,6 +5,11 @@ image:
   tag: "latest"
   pullPolicy: IfNotPresent
 
+# References Kubernetes secrets of type kubernetes.io/dockerconfigjson.
+# The secret must already exist in the target namespace.
+# Format: [{ name: ghcr-pull }]
+imagePullSecrets: []
+
 containerPort: 8080
 
 service:

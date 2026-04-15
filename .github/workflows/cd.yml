@@ -1,6 +1,10 @@
 name: CD
 
 on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   push:
     tags: ['v*']
   workflow_dispatch:
@@ -14,81 +18,143 @@ on:
           - staging
           - prod
 
-env:
-  REGISTRY: ${{ vars.DOCKER_REGISTRY }}
+concurrency:
+  group: cd-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   determine-env:
     name: Determine Environment
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     outputs:
       environment: ${{ steps.env.outputs.environment }}
       image_tag: ${{ steps.env.outputs.image_tag }}
+      image_registry: ${{ steps.env.outputs.image_registry }}
+      needs_build: ${{ steps.env.outputs.needs_build }}
+      head_sha: ${{ steps.env.outputs.head_sha }}
     steps:
       - id: env
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            # CI succeeded on main → deploy to dev; image already pushed by CI.
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
             echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "environment=staging" >> "$GITHUB_OUTPUT"
             echo "image_tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "environment=dev" >> "$GITHUB_OUTPUT"
-            echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "head_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
           fi
+          echo "image_registry=ghcr.io/${{ github.repository_owner }}" >> "$GITHUB_OUTPUT"
 
   build-push:
     name: Build & Push
     runs-on: ubuntu-latest
     needs: determine-env
+    if: needs.determine-env.outputs.needs_build == 'true'
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         service: [auth-service, user-service]
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.determine-env.outputs.head_sha }}
 
-      - name: Log in to registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ${{ matrix.service }}/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ matrix.service }}:${{ needs.determine-env.outputs.image_tag }}
-            ${{ env.REGISTRY }}/${{ matrix.service }}:${{ needs.determine-env.outputs.environment }}-latest
+            ${{ needs.determine-env.outputs.image_registry }}/${{ matrix.service }}:${{ needs.determine-env.outputs.image_tag }}
+            ${{ needs.determine-env.outputs.image_registry }}/${{ matrix.service }}:${{ needs.determine-env.outputs.environment }}-latest
 
   deploy:
     name: Deploy to ${{ needs.determine-env.outputs.environment }}
     runs-on: ubuntu-latest
     needs: [determine-env, build-push]
+    if: >-
+      always() &&
+      needs.determine-env.result == 'success' &&
+      (needs.build-push.result == 'success' || needs.build-push.result == 'skipped')
     environment: ${{ needs.determine-env.outputs.environment }}
+    env:
+      ENVIRONMENT: ${{ needs.determine-env.outputs.environment }}
+      IMAGE_TAG: ${{ needs.determine-env.outputs.image_tag }}
+      DOCKER_REGISTRY: ${{ needs.determine-env.outputs.image_registry }}
+      KUBECONFIG: /tmp/oke-${{ needs.determine-env.outputs.environment }}-kubeconfig
+      K8S_NAMESPACE: ${{ needs.determine-env.outputs.environment }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.determine-env.outputs.head_sha }}
 
-      - name: Configure kubectl
+      - name: Install kubectl
         uses: azure/setup-kubectl@v3
 
-      - name: Set kubeconfig
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Write kubeconfig
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+          mkdir -p "$(dirname "$KUBECONFIG")"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "$KUBECONFIG"
+          chmod 600 "$KUBECONFIG"
+
+      - name: Ensure namespace and GHCR pull secret
+        run: |
+          kubectl create namespace "$K8S_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace "$K8S_NAMESPACE" \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.repository_owner }}" \
+            --docker-password="${{ secrets.GHCR_PULL_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy services
         env:
-          ENVIRONMENT: ${{ needs.determine-env.outputs.environment }}
-          IMAGE_TAG: ${{ needs.determine-env.outputs.image_tag }}
-        run: |
-          ./scripts/deploy-services.sh "$ENVIRONMENT"
+          AUTH_DATABASE_URL: ${{ secrets.AUTH_DATABASE_URL }}
+          AUTH_DATABASE_READ_URL: ${{ secrets.AUTH_DATABASE_READ_URL }}
+          USER_DATABASE_URL: ${{ secrets.USER_DATABASE_URL }}
+          USER_DATABASE_READ_URL: ${{ secrets.USER_DATABASE_READ_URL }}
+          JWT_SHARED_SECRET: ${{ secrets.JWT_SHARED_SECRET }}
+          OCI_LB_SUBNET_OCID: ${{ secrets.OCI_LB_SUBNET_OCID }}
+          IMAGE_PULL_SECRET: ghcr-pull
+          EXPOSE_PUBLIC: "false"
+          WAIT_FOR_EXTERNAL_IP: "false"
+        run: ./scripts/deploy-services.sh "$ENVIRONMENT"
+
+      - name: Apply app ingress routes
+        run: ./scripts/ingress/apply-app-ingress.sh "$ENVIRONMENT"
 
       - name: Verify rollout
         run: |
-          kubectl rollout status deployment/auth-service -n ${{ needs.determine-env.outputs.environment }} --timeout=180s
-          kubectl rollout status deployment/user-service -n ${{ needs.determine-env.outputs.environment }} --timeout=180s
+          kubectl rollout status deployment/auth-service -n "$K8S_NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/user-service -n "$K8S_NAMESPACE" --timeout=180s
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh "$ENVIRONMENT"
