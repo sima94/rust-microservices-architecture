@@ -14,7 +14,9 @@ helm/
 scripts/
 docker/
 nginx/
-postman/
+# postman/: keep generator (workspace member), drop everything else
+postman/*
+!postman/generator/
 
 # Documentation
 *.md
