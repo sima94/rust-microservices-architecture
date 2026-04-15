@@ -12,7 +12,7 @@ WORKDIR /usr/src/app
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
-RUN apt-get update && apt-get install -y cmake pkg-config && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y cmake pkg-config libssl-dev libsasl2-dev libcurl4-openssl-dev zlib1g-dev && rm -rf /var/lib/apt/lists/*
 
 COPY shared/ /usr/src/shared/
 COPY --from=planner /usr/src/app/recipe.json /usr/src/app/recipe.json
